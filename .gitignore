@@ -32,3 +32,4 @@ target/
 data/
 out/
 log-camel-lsp.out
+.factorypath
