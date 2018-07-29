@@ -58,9 +58,14 @@ public class RoutesLoaderAutoConfiguration {
             (Resource source) -> {
                 return new RouteBuilder() {
                     public void configure() throws Exception {
-                        ScriptEngine engine = new ScriptEngineManager().getEngineByName("javascript");
+                        //https://stackoverflow.com/questions/31236550/defining-a-default-global-java-object-to-nashorn-script-engine
+                        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+
+                        // get JavaScript "global" object
                         Object global = engine.eval("this");
+                        // get JS "Object" constructor object
                         Object jsObject = engine.eval("Object");
+
                         Invocable invocable = (Invocable) engine;
 
                         // "bind" properties of this to JS global object
