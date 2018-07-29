@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  com.github.lburgazzoli.camel.loaders.LoadersAutoConfiguration
+  com.github.lburgazzoli.camel.route.autoconfigure.RoutesLoaderAutoConfiguration

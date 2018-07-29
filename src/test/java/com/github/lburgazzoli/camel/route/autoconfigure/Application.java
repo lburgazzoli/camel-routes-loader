@@ -1,4 +1,4 @@
-package com.github.lburgazzoli.camel.loaders;
+package com.github.lburgazzoli.camel.route.autoconfigure;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
