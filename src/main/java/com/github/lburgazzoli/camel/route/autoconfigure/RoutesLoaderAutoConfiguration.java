@@ -84,7 +84,7 @@ public class RoutesLoaderAutoConfiguration {
         return new RoutesLoader(
             applicationContext,
             configuration,
-            ".js",
+            ".groovy",
             (Resource source) -> {
                 return new RouteBuilder() {
                     public void configure() throws Exception {
