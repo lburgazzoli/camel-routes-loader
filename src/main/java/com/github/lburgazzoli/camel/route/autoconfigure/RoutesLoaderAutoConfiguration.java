@@ -96,25 +96,26 @@ public class RoutesLoaderAutoConfiguration {
             (Resource source) -> {
                 return new RouteBuilder() {
                     public void configure() throws Exception {
-                        final Context context = Context.create();
+                        try(Context context = Context.create()) {
 
-                        // add this builder instance to javascript language
-                        // bindings
-                        context.getBindings("js").putMember("builder", this);
+                            // add this builder instance to javascript language
+                            // bindings
+                            context.getBindings("js").putMember("builder", this);
 
-                        // move builder's methods to global scope
-                        context.eval(
-                            "js",
-                            "m = Object.keys(builder)\n" +
-                            "m.forEach((element) => {\n" +
-                            "    global[element] = builder[element]\n" +
-                            "});"
-                        );
-
-                        try (InputStream is = source.getInputStream()) {
+                            // move builder's methods to global scope
                             context.eval(
-                                Source.newBuilder("js", new InputStreamReader(is), "").build()
+                                "js",
+                                "m = Object.keys(builder)\n" +
+                                    "m.forEach((element) => {\n" +
+                                    "    global[element] = builder[element]\n" +
+                                    "});"
                             );
+
+                            try (InputStream is = source.getInputStream()) {
+                                context.eval(
+                                    Source.newBuilder("js", new InputStreamReader(is), "").build()
+                                );
+                            }
                         }
                     }
                 };
