@@ -102,7 +102,8 @@ public class RoutesLoaderAutoConfiguration {
                             // bindings
                             context.getBindings("js").putMember("builder", this);
 
-                            // move builder's methods to global scope
+                            // move builder's methods to global scope so builder's
+                            // dsl can be invoke directly
                             context.eval(
                                 "js",
                                 "m = Object.keys(builder)\n" +
@@ -110,6 +111,9 @@ public class RoutesLoaderAutoConfiguration {
                                     "    global[element] = builder[element]\n" +
                                     "});"
                             );
+
+                            // remove bindings
+                            context.getBindings("js").removeMember("builder");
 
                             try (InputStream is = source.getInputStream()) {
                                 context.eval(
