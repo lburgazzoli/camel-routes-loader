@@ -45,7 +45,7 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 @ConditionalOnProperty(prefix = "camel.routes.loader", name = "enabled")
 @EnableConfigurationProperties(RoutesLoaderConfigurationProperties.class)
 public class RoutesLoaderAutoConfiguration {
-    
+
     @Bean
     @Conditional(JSNashorn.class)
     public CamelContextConfiguration loadJSRoutes(
