@@ -18,6 +18,7 @@ package com.github.lburgazzoli.camel.route.autoconfigure;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import javax.script.Invocable;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -25,11 +26,12 @@ import javax.script.ScriptEngineManager;
 import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
 import groovy.util.DelegatingScript;
-import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.spring.boot.CamelContextConfiguration;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -39,13 +41,13 @@ import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
 @Configuration
 @ConditionalOnProperty(prefix = "camel.routes.loader", name = "enabled")
 @EnableConfigurationProperties(RoutesLoaderConfigurationProperties.class)
 public class RoutesLoaderAutoConfiguration {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RoutesLoaderAutoConfiguration.class);
 
     @Bean
     @Conditional(JSNashorn.class)
@@ -57,27 +59,24 @@ public class RoutesLoaderAutoConfiguration {
             applicationContext,
             configuration,
             ".js",
-            (Resource source) -> {
-                return new RouteBuilder() {
-                    public void configure() throws Exception {
-                        //https://stackoverflow.com/questions/31236550/defining-a-default-global-java-object-to-nashorn-script-engine
-                        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+            (source, builder) -> {
+                //https://stackoverflow.com/questions/31236550/defining-a-default-global-java-object-to-nashorn-script-engine
+                final ScriptEngineManager manager = new ScriptEngineManager();
+                final ScriptEngine engine = manager.getEngineByName("nashorn");
 
-                        // get JavaScript "global" object
-                        Object global = engine.eval("this");
-                        // get JS "Object" constructor object
-                        Object jsObject = engine.eval("Object");
+                // get JS "global" object
+                Object global = engine.eval("this");
+                // get JS "Object" constructor object
+                Object jsObject = engine.eval("Object");
 
-                        Invocable invocable = (Invocable) engine;
+                Invocable invocable = (Invocable) engine;
 
-                        // "bind" properties of this to JS global object
-                        invocable.invokeMethod(jsObject, "bindProperties", global, this);
-
-                        try (InputStream is = source.getInputStream()) {
-                            engine.eval(new InputStreamReader(is));
-                        }
-                    }
-                };
+                // bind properties of this builder to JS global object
+                invocable.invokeMethod(jsObject, "bindProperties", global, builder);
+                
+                try (InputStream is = source.getInputStream()) {
+                    engine.eval(new InputStreamReader(is));
+                }
             }
         );
     }
@@ -93,35 +92,29 @@ public class RoutesLoaderAutoConfiguration {
             applicationContext,
             configuration,
             ".gjs",
-            (Resource source) -> {
-                return new RouteBuilder() {
-                    public void configure() throws Exception {
-                        try(Context context = Context.create()) {
-                            // add this builder instance to javascript language
-                            // bindings
-                            context.getBindings("js").putMember("builder", this);
+            (source, builder) -> {
+                try(Context context = Context.create()) {
+                    // add this builder instance to javascript language
+                    // bindings
+                    context.getBindings("js").putMember("builder", builder);
 
-                            // move builder's methods to global scope so builder's
-                            // dsl can be invoke directly
-                            context.eval(
-                                "js",
-                                "m = Object.keys(builder)\n" +
-                                "m.forEach((element) => {\n" +
-                                "    global[element] = builder[element]\n" +
-                                "});"
-                            );
+                    // move builder's methods to global scope so builder's
+                    // dsl can be invoke directly
+                    context.eval(
+                        "js",
+                        "m = Object.keys(builder)\n" +
+                        "m.forEach(element => global[element] = builder[element])"
+                    );
 
-                            // remove bindings
-                            context.getBindings("js").removeMember("builder");
+                    // remove bindings
+                    context.getBindings("js").removeMember("builder");
 
-                            try (InputStream is = source.getInputStream()) {
-                                context.eval(
-                                    Source.newBuilder("js", new InputStreamReader(is), "").build()
-                                );
-                            }
-                        }
+                    try (InputStream is = source.getInputStream()) {
+                        context.eval(
+                            Source.newBuilder("js", new InputStreamReader(is), "").build()
+                        );
                     }
-                };
+                }
             }
         );
     }
@@ -136,24 +129,21 @@ public class RoutesLoaderAutoConfiguration {
             applicationContext,
             configuration,
             ".groovy",
-            (Resource source) -> {
-                return new RouteBuilder() {
-                    public void configure() throws Exception {
-                        CompilerConfiguration cc = new CompilerConfiguration();
-                        cc.setScriptBaseClass(DelegatingScript.class.getName());
+            (source, builder) -> {
+                CompilerConfiguration cc = new CompilerConfiguration();
+                cc.setScriptBaseClass(DelegatingScript.class.getName());
 
-                        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-                        GroovyShell sh = new GroovyShell(cl, new Binding(), cc);
+                ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                GroovyShell sh = new GroovyShell(cl, new Binding(), cc);
 
-                        try (InputStream is = source.getInputStream()) {
-                            DelegatingScript script = (DelegatingScript) sh.parse(new InputStreamReader(is));
+                try (InputStream is = source.getInputStream()) {
+                    Reader reader = new InputStreamReader(is);
+                    DelegatingScript script = (DelegatingScript) sh.parse(reader);
 
-                            // set the delegate target
-                            script.setDelegate(this);
-                            script.run();
-                        }
-                    }
-                };
+                    // set the delegate target
+                    script.setDelegate(builder);
+                    script.run();
+                }
             }
         );
     }

@@ -19,9 +19,9 @@ package com.github.lburgazzoli.camel.route.autoconfigure;
 import org.apache.camel.CamelContext;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.spring.boot.CamelContextConfiguration;
+import org.apache.camel.util.function.ThrowingBiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cglib.core.internal.Function;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.Resource;
 
@@ -31,13 +31,13 @@ final class RoutesLoader implements CamelContextConfiguration {
     private final ApplicationContext applicationContext;
     private final RoutesLoaderConfigurationProperties configuration;
     private final String extension;
-    private final Function<Resource, RouteBuilder> mapper;
+    private final ThrowingBiConsumer<Resource, RouteBuilder, Exception> mapper;
 
     RoutesLoader(
             ApplicationContext applicationContext,
             RoutesLoaderConfigurationProperties configuration,
             String extension,
-            Function<Resource, RouteBuilder> mapper) {
+            ThrowingBiConsumer<Resource, RouteBuilder, Exception> mapper) {
         this.applicationContext = applicationContext;
         this.configuration = configuration;
         this.extension = extension;
@@ -52,7 +52,13 @@ final class RoutesLoader implements CamelContextConfiguration {
                     if (source.isFile() && source.getFilename().endsWith(extension)) {
                         LOGGER.info("Loading additional Camel routes from: {}", source);
 
-                        camelContext.addRoutes( mapper.apply(source));
+
+                        camelContext.addRoutes(new RouteBuilder() {
+                            @Override
+                            public void configure() throws Exception {
+                                mapper.accept(source, this);
+                            }
+                        });
                     }
                 }
             }
