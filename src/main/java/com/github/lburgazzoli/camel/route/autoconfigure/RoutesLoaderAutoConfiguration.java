@@ -28,6 +28,8 @@ import groovy.util.DelegatingScript;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.spring.boot.CamelContextConfiguration;
 import org.codehaus.groovy.control.CompilerConfiguration;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Source;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -46,7 +48,7 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 public class RoutesLoaderAutoConfiguration {
 
     @Bean
-    @Conditional(JSScriptin.class)
+    @Conditional(JSNashorn.class)
     public CamelContextConfiguration loadJSRoutes(
             final ApplicationContext applicationContext,
             final RoutesLoaderConfigurationProperties configuration) {
@@ -73,6 +75,46 @@ public class RoutesLoaderAutoConfiguration {
 
                         try (InputStream is = source.getInputStream()) {
                             engine.eval(new InputStreamReader(is));
+                        }
+                    }
+                };
+            }
+        );
+    }
+
+    @Bean
+    @Conditional(JSGraal.class)
+    @ConditionalOnClass(Context.class)
+    public CamelContextConfiguration loadGraalJSRoutes(
+        final ApplicationContext applicationContext,
+        final RoutesLoaderConfigurationProperties configuration) {
+
+        return new RoutesLoader(
+            applicationContext,
+            configuration,
+            ".gjs",
+            (Resource source) -> {
+                return new RouteBuilder() {
+                    public void configure() throws Exception {
+                        final Context context = Context.create();
+
+                        // add this builder instance to javascript language
+                        // bindings
+                        context.getBindings("js").putMember("builder", this);
+
+                        // move builder's methods to global scope
+                        context.eval(
+                            "js",
+                            "m = Object.keys(builder)\n" +
+                            "m.forEach((element) => {\n" +
+                            "    global[element] = builder[element]\n" +
+                            "});"
+                        );
+
+                        try (InputStream is = source.getInputStream()) {
+                            context.eval(
+                                Source.newBuilder("js", new InputStreamReader(is), "").build()
+                            );
                         }
                     }
                 };
@@ -109,10 +151,22 @@ public class RoutesLoaderAutoConfiguration {
         );
     }
 
-    private static final class JSScriptin implements Condition {
+    private static final class JSNashorn implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            return new ScriptEngineManager().getEngineByName("javascript") != null;
+            return new ScriptEngineManager().getEngineByName("nashorn") != null;
+        }
+    }
+
+    private static final class JSGraal implements Condition {
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            String vmName = System.getProperty("java.vm.name");
+            if (vmName != null) {
+                return vmName.toLowerCase().startsWith("graalvm");
+            }
+
+            return false;
         }
     }
 }
