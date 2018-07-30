@@ -97,7 +97,6 @@ public class RoutesLoaderAutoConfiguration {
                 return new RouteBuilder() {
                     public void configure() throws Exception {
                         try(Context context = Context.create()) {
-
                             // add this builder instance to javascript language
                             // bindings
                             context.getBindings("js").putMember("builder", this);
@@ -107,9 +106,9 @@ public class RoutesLoaderAutoConfiguration {
                             context.eval(
                                 "js",
                                 "m = Object.keys(builder)\n" +
-                                    "m.forEach((element) => {\n" +
-                                    "    global[element] = builder[element]\n" +
-                                    "});"
+                                "m.forEach((element) => {\n" +
+                                "    global[element] = builder[element]\n" +
+                                "});"
                             );
 
                             // remove bindings
@@ -143,10 +142,13 @@ public class RoutesLoaderAutoConfiguration {
                         CompilerConfiguration cc = new CompilerConfiguration();
                         cc.setScriptBaseClass(DelegatingScript.class.getName());
 
-                        GroovyShell sh = new GroovyShell(Thread.currentThread().getContextClassLoader(), new Binding(), cc);
+                        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                        GroovyShell sh = new GroovyShell(cl, new Binding(), cc);
 
                         try (InputStream is = source.getInputStream()) {
                             DelegatingScript script = (DelegatingScript) sh.parse(new InputStreamReader(is));
+
+                            // set the delegate target
                             script.setDelegate(this);
                             script.run();
                         }
