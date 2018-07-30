@@ -30,8 +30,6 @@ import org.apache.camel.spring.boot.CamelContextConfiguration;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -47,8 +45,7 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 @ConditionalOnProperty(prefix = "camel.routes.loader", name = "enabled")
 @EnableConfigurationProperties(RoutesLoaderConfigurationProperties.class)
 public class RoutesLoaderAutoConfiguration {
-    private static final Logger LOGGER = LoggerFactory.getLogger(RoutesLoaderAutoConfiguration.class);
-
+    
     @Bean
     @Conditional(JSNashorn.class)
     public CamelContextConfiguration loadJSRoutes(
@@ -73,7 +70,7 @@ public class RoutesLoaderAutoConfiguration {
 
                 // bind properties of this builder to JS global object
                 invocable.invokeMethod(jsObject, "bindProperties", global, builder);
-                
+
                 try (InputStream is = source.getInputStream()) {
                     engine.eval(new InputStreamReader(is));
                 }
