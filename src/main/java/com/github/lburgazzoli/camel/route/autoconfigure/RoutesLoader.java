@@ -49,9 +49,8 @@ final class RoutesLoader implements CamelContextConfiguration {
         try {
             for (String location: configuration.getLocations()) {
                 for (Resource source : applicationContext.getResources(location)) {
-                    if (source.isFile() && source.getFilename().endsWith(extension)) {
+                    if (source.getFilename().endsWith(extension)) {
                         LOGGER.info("Loading additional Camel routes from: {}", source);
-
 
                         camelContext.addRoutes(new RouteBuilder() {
                             @Override

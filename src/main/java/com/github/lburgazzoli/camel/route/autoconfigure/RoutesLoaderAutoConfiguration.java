@@ -18,19 +18,22 @@ package com.github.lburgazzoli.camel.route.autoconfigure;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.Reader;
-import javax.script.Invocable;
+import java.util.Map;
+import java.util.function.Function;
+import javax.script.Bindings;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
+import javax.script.SimpleBindings;
 
-import groovy.lang.Binding;
-import groovy.lang.GroovyShell;
-import groovy.util.DelegatingScript;
+import com.google.gson.Gson;
+import org.apache.camel.CamelContext;
+import org.apache.camel.Component;
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.spring.boot.CamelContextConfiguration;
-import org.codehaus.groovy.control.CompilerConfiguration;
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Source;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.apache.camel.util.function.ThrowingBiConsumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
@@ -39,48 +42,24 @@ import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
 @Configuration
 @ConditionalOnProperty(prefix = "camel.routes.loader", name = "enabled")
 @EnableConfigurationProperties(RoutesLoaderConfigurationProperties.class)
 public class RoutesLoaderAutoConfiguration {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RoutesLoaderAutoConfiguration.class);
+    private static final ScriptEngineManager ENGINE_MANAGER = new ScriptEngineManager();
+
+    // ********************************
+    //
+    // Loaders
+    //
+    // ********************************
 
     @Bean
-    @Conditional(JSNashorn.class)
-    public CamelContextConfiguration loadJSRoutes(
-            final ApplicationContext applicationContext,
-            final RoutesLoaderConfigurationProperties configuration) {
-
-        return new RoutesLoader(
-            applicationContext,
-            configuration,
-            ".js",
-            (source, builder) -> {
-                //https://stackoverflow.com/questions/31236550/defining-a-default-global-java-object-to-nashorn-script-engine
-                final ScriptEngineManager manager = new ScriptEngineManager();
-                final ScriptEngine engine = manager.getEngineByName("nashorn");
-
-                // get JS "global" object
-                Object global = engine.eval("this");
-                // get JS "Object" constructor object
-                Object jsObject = engine.eval("Object");
-
-                Invocable invocable = (Invocable) engine;
-
-                // bind properties of this builder to JS global object
-                invocable.invokeMethod(jsObject, "bindProperties", global, builder);
-
-                try (InputStream is = source.getInputStream()) {
-                    engine.eval(new InputStreamReader(is));
-                }
-            }
-        );
-    }
-
-    @Bean
-    @Conditional(JSGraal.class)
-    @ConditionalOnClass(Context.class)
+    @Conditional(ScriptingJs.class)
     public CamelContextConfiguration loadGraalJSRoutes(
         final ApplicationContext applicationContext,
         final RoutesLoaderConfigurationProperties configuration) {
@@ -88,36 +67,13 @@ public class RoutesLoaderAutoConfiguration {
         return new RoutesLoader(
             applicationContext,
             configuration,
-            ".gjs",
-            (source, builder) -> {
-                try(Context context = Context.create()) {
-                    // add this builder instance to javascript language
-                    // bindings
-                    context.getBindings("js").putMember("builder", builder);
-
-                    // move builder's methods to global scope so builder's
-                    // dsl can be invoke directly
-                    context.eval(
-                        "js",
-                        "m = Object.keys(builder)\n" +
-                        "m.forEach(element => global[element] = builder[element])"
-                    );
-
-                    // remove bindings
-                    context.getBindings("js").removeMember("builder");
-
-                    try (InputStream is = source.getInputStream()) {
-                        context.eval(
-                            Source.newBuilder("js", new InputStreamReader(is), "").build()
-                        );
-                    }
-                }
-            }
+            ".js",
+            new ScriptingLoader("js")
         );
     }
 
     @Bean
-    @ConditionalOnClass(GroovyShell.class)
+    @Conditional(ScriptingGroovy.class)
     public CamelContextConfiguration loadGroovyRoutes(
             final ApplicationContext applicationContext,
             final RoutesLoaderConfigurationProperties configuration) {
@@ -126,41 +82,91 @@ public class RoutesLoaderAutoConfiguration {
             applicationContext,
             configuration,
             ".groovy",
-            (source, builder) -> {
-                CompilerConfiguration cc = new CompilerConfiguration();
-                cc.setScriptBaseClass(DelegatingScript.class.getName());
-
-                ClassLoader cl = Thread.currentThread().getContextClassLoader();
-                GroovyShell sh = new GroovyShell(cl, new Binding(), cc);
-
-                try (InputStream is = source.getInputStream()) {
-                    Reader reader = new InputStreamReader(is);
-                    DelegatingScript script = (DelegatingScript) sh.parse(reader);
-
-                    // set the delegate target
-                    script.setDelegate(builder);
-                    script.run();
-                }
-            }
+            new ScriptingLoader("groovy")
         );
     }
 
-    private static final class JSNashorn implements Condition {
+    // ********************************
+    //
+    // Helpers
+    //
+    // ********************************
+
+    private static final class ScriptingGroovy implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            return new ScriptEngineManager().getEngineByName("nashorn") != null;
+            return ENGINE_MANAGER.getEngineByName("groovy") != null;
         }
     }
 
-    private static final class JSGraal implements Condition {
+    private static final class ScriptingJs implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            String vmName = System.getProperty("java.vm.name");
-            if (vmName != null) {
-                return vmName.toLowerCase().startsWith("graalvm");
-            }
+            return ENGINE_MANAGER.getEngineByName("js") != null;
+        }
+    }
 
-            return false;
+    private static final class ScriptingLoader implements ThrowingBiConsumer<Resource, RouteBuilder, Exception> {
+        private final String language;
+
+        public ScriptingLoader(String language) {
+            this.language = language;
+        }
+
+        // TODO: bind utility methods such as those from BuilderSupport
+        @Override
+        public void accept(Resource resource, RouteBuilder builder) throws Exception {
+            final ScriptEngineManager manager = new ScriptEngineManager();
+            final ScriptEngine engine = manager.getEngineByName(this.language);
+            final Bindings bindings = new SimpleBindings();
+
+            bindings.put("components", new CamelComponents(builder.getContext()));
+            bindings.put("properties", new CamelProperties(builder.getContext()));
+            bindings.put("from", (Function<String, RouteDefinition>) uri -> builder.from(uri));
+
+            try (InputStream is = resource.getInputStream()) {
+                engine.eval(new InputStreamReader(is), bindings);
+            }
+        }
+    }
+
+    public static class CamelComponents {
+        private CamelContext context;
+
+        public CamelComponents(CamelContext context) {
+            this.context = context;
+        }
+
+        public Component get(String scheme) {
+            return context.getComponent(scheme, true);
+        }
+
+        public Component alias(String scheme, String alias) {
+            final String json = context.getRuntimeCamelCatalog().componentJSonSchema(scheme);
+            final Map<String, Object> component = new Gson().fromJson(json, Map.class);
+            final String type = (String)((Map<String, Object>)component.get("component")).get("javaType");
+            final Class<?> clazz = context.getClassResolver().resolveClass(type);
+            final Component inst = (Component)context.getInjector().newInstance(clazz);
+
+            context.addComponent(alias, inst);
+
+            return inst;
+        }
+    }
+
+    public static class CamelProperties {
+        private CamelContext context;
+
+        public CamelProperties(CamelContext context) {
+            this.context = context;
+        }
+
+        public String resolve(String property) {
+            try {
+                return context.resolvePropertyPlaceholders(property);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }

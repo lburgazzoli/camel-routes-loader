@@ -6,5 +6,4 @@ camel:
       enabled: true
       locations:
         - classpath:ext/camel/*.js
-        - classpath:ext/camel/*.gjs
         - classpath:ext/camel/*.groovy

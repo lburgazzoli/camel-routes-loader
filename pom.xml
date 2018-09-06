@@ -1,106 +1,110 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
 
-	<groupId>com.github.lburgazzoli</groupId>
-	<artifactId>camel-routes-loader</artifactId>
-	<version>2.22.0-SNAPSHOT</version>
-	<packaging>jar</packaging>
+  <groupId>com.github.lburgazzoli</groupId>
+  <artifactId>camel-routes-loader</artifactId>
+  <version>2.22.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
 
-	<name>camel-routes-loader</name>
-	<description>Load routes from scripting languages such as js and groovy</description>
+  <name>camel-routes-loader</name>
+  <description>Load routes from scripting languages such as js and groovy</description>
 
-	<properties>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<java.version>1.8</java.version>
-		<camel.version>2.22.0</camel.version>
-		<spring-boot.version>2.0.3.RELEASE</spring-boot.version>
-		<graal-vm.version>1.0.0-rc4</graal-vm.version>
-	</properties>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <java.version>1.8</java.version>
+    <camel.version>2.22.0</camel.version>
+    <spring-boot.version>2.0.3.RELEASE</spring-boot.version>
+    <graal-vm.version>1.0.0-rc6</graal-vm.version>
+  </properties>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<!-- Import dependency management from Spring Boot -->
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-dependencies</artifactId>
-				<version>${spring-boot.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <!-- Import dependency management from Spring Boot -->
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
-			<dependency>
-				<groupId>org.apache.camel</groupId>
-				<artifactId>camel-spring-boot-dependencies</artifactId>
-				<version>${camel.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
+      <dependency>
+        <groupId>org.apache.camel</groupId>
+        <artifactId>camel-spring-boot-dependencies</artifactId>
+        <version>${camel.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
-	<dependencies>
+  <dependencies>
 
-		<!-- commons -->
-		<dependency>
-			<groupId>commons-io</groupId>
-			<artifactId>commons-io</artifactId>
-		</dependency>
+    <!-- commons -->
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
 
-		<!-- spring-boot -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-autoconfigure</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-configuration-processor</artifactId>
-			<optional>true</optional>
-		</dependency>
+    <!-- spring-boot -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-autoconfigure</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional>
+    </dependency>
 
-		<!-- camel -->
-		<dependency>
-			<groupId>org.apache.camel</groupId>
-			<artifactId>camel-spring-boot</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.camel</groupId>
-			<artifactId>camel-groovy</artifactId>
-			<optional>true</optional>
-		</dependency>
+    <!-- camel -->
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-spring-boot</artifactId>
+    </dependency>
+    <!--
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-groovy</artifactId>
+      <optional>true</optional>
+    </dependency>
+    -->
 
-		<!-- graalvm -->
-		<dependency>
-			<groupId>org.graalvm</groupId>
-			<artifactId>graal-sdk</artifactId>
-			<version>${graal-vm.version}</version>
-			<optional>true</optional>
-		</dependency>
+    <!-- graalvm -->
+    <dependency>
+      <groupId>org.graalvm</groupId>
+      <artifactId>graal-sdk</artifactId>
+      <version>${graal-vm.version}</version>
+      <optional>true</optional>
+    </dependency>
 
-		<!-- test -->
-		<dependency>
-			<groupId>org.yaml</groupId>
-			<artifactId>snakeyaml</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>ch.qos.logback</groupId>
-			<artifactId>logback-classic</artifactId>
-			<scope>test</scope>
-		</dependency>
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+    </dependency>
 
-	</dependencies>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+    </dependency>
 
-	<build>
-		<plugins>
+  </dependencies>
+
+  <build>
+    <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -110,13 +114,19 @@
           <target>1.8</target>
         </configuration>
       </plugin>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>${spring-boot.version}</version>
-			</plugin>
-		</plugins>
-	</build>
-
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>
