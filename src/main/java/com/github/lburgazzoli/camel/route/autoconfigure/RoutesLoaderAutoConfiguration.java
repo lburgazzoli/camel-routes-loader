@@ -16,22 +16,12 @@
  */
 package com.github.lburgazzoli.camel.route.autoconfigure;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.Map;
-import java.util.function.Function;
-import javax.script.Bindings;
-import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
-import javax.script.SimpleBindings;
 
-import com.google.gson.Gson;
-import org.apache.camel.CamelContext;
-import org.apache.camel.Component;
-import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.model.RouteDefinition;
+import com.github.lburgazzoli.camel.route.scripting.GraalJsRouteLoader;
+import com.github.lburgazzoli.camel.route.scripting.GroovyRouteLoader;
+import com.github.lburgazzoli.camel.route.scripting.NashornRouteLoader;
 import org.apache.camel.spring.boot.CamelContextConfiguration;
-import org.apache.camel.util.function.ThrowingBiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -42,7 +32,6 @@ import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
 @Configuration
@@ -59,8 +48,8 @@ public class RoutesLoaderAutoConfiguration {
     // ********************************
 
     @Bean
-    @Conditional(ScriptingJs.class)
-    public CamelContextConfiguration loadGraalJSRoutes(
+    @Conditional(NashornScriptCondition.class)
+    public CamelContextConfiguration nashornRoutes(
         final ApplicationContext applicationContext,
         final RoutesLoaderConfigurationProperties configuration) {
 
@@ -68,13 +57,28 @@ public class RoutesLoaderAutoConfiguration {
             applicationContext,
             configuration,
             ".js",
-            new ScriptingLoader("js")
+            new NashornRouteLoader()
+        );
+    }
+
+
+    @Bean
+    @Conditional(GraalJsScriptCondition.class)
+    public CamelContextConfiguration graalJsRoutes(
+        final ApplicationContext applicationContext,
+        final RoutesLoaderConfigurationProperties configuration) {
+
+        return new RoutesLoader(
+            applicationContext,
+            configuration,
+            ".gjs",
+            new GraalJsRouteLoader()
         );
     }
 
     @Bean
-    @Conditional(ScriptingGroovy.class)
-    public CamelContextConfiguration loadGroovyRoutes(
+    @Conditional(GroovyCondition.class)
+    public CamelContextConfiguration groovyRoutes(
             final ApplicationContext applicationContext,
             final RoutesLoaderConfigurationProperties configuration) {
 
@@ -82,7 +86,7 @@ public class RoutesLoaderAutoConfiguration {
             applicationContext,
             configuration,
             ".groovy",
-            new ScriptingLoader("groovy")
+            new GroovyRouteLoader()
         );
     }
 
@@ -92,81 +96,24 @@ public class RoutesLoaderAutoConfiguration {
     //
     // ********************************
 
-    private static final class ScriptingGroovy implements Condition {
+    private static final class GroovyCondition implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
             return ENGINE_MANAGER.getEngineByName("groovy") != null;
         }
     }
 
-    private static final class ScriptingJs implements Condition {
+    private static final class NashornScriptCondition implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            return ENGINE_MANAGER.getEngineByName("js") != null;
+            return ENGINE_MANAGER.getEngineByName("nashorn") != null && ENGINE_MANAGER.getEngineByName("graal.js") == null;
         }
     }
 
-    private static final class ScriptingLoader implements ThrowingBiConsumer<Resource, RouteBuilder, Exception> {
-        private final String language;
-
-        public ScriptingLoader(String language) {
-            this.language = language;
-        }
-
-        // TODO: bind utility methods such as those from BuilderSupport
+    private static final class GraalJsScriptCondition implements Condition {
         @Override
-        public void accept(Resource resource, RouteBuilder builder) throws Exception {
-            final ScriptEngineManager manager = new ScriptEngineManager();
-            final ScriptEngine engine = manager.getEngineByName(this.language);
-            final Bindings bindings = new SimpleBindings();
-
-            bindings.put("components", new CamelComponents(builder.getContext()));
-            bindings.put("properties", new CamelProperties(builder.getContext()));
-            bindings.put("from", (Function<String, RouteDefinition>) uri -> builder.from(uri));
-
-            try (InputStream is = resource.getInputStream()) {
-                engine.eval(new InputStreamReader(is), bindings);
-            }
-        }
-    }
-
-    public static class CamelComponents {
-        private CamelContext context;
-
-        public CamelComponents(CamelContext context) {
-            this.context = context;
-        }
-
-        public Component get(String scheme) {
-            return context.getComponent(scheme, true);
-        }
-
-        public Component alias(String scheme, String alias) {
-            final String json = context.getRuntimeCamelCatalog().componentJSonSchema(scheme);
-            final Map<String, Object> component = new Gson().fromJson(json, Map.class);
-            final String type = (String)((Map<String, Object>)component.get("component")).get("javaType");
-            final Class<?> clazz = context.getClassResolver().resolveClass(type);
-            final Component inst = (Component)context.getInjector().newInstance(clazz);
-
-            context.addComponent(alias, inst);
-
-            return inst;
-        }
-    }
-
-    public static class CamelProperties {
-        private CamelContext context;
-
-        public CamelProperties(CamelContext context) {
-            this.context = context;
-        }
-
-        public String resolve(String property) {
-            try {
-                return context.resolvePropertyPlaceholders(property);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            return ENGINE_MANAGER.getEngineByName("graal.js") != null;
         }
     }
 }

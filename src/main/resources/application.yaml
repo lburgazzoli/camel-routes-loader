@@ -1,9 +1,13 @@
 camel:
   springboot:
     main-run-controller: true
+    jmx-enabled: false
+    xml-routes: false
+    xml-rests: false
   routes:
     loader:
       enabled: true
       locations:
         - classpath:ext/camel/*.js
+        - classpath:ext/camel/*.gjs
         - classpath:ext/camel/*.groovy

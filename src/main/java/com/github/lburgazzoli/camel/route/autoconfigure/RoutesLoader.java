@@ -38,6 +38,7 @@ final class RoutesLoader implements CamelContextConfiguration {
             RoutesLoaderConfigurationProperties configuration,
             String extension,
             ThrowingBiConsumer<Resource, RouteBuilder, Exception> mapper) {
+
         this.applicationContext = applicationContext;
         this.configuration = configuration;
         this.extension = extension;
